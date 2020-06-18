@@ -11,7 +11,7 @@ def nege(x):
     y = np.log(np.cosh(x))
     E1 = np.mean(y)
     E2 = 0.3745672075
-    negentropy = (E1 - E2) ** 2
+    negentropy = np.power(E1 - E2, 2)
     return negentropy
 
 
@@ -24,13 +24,11 @@ def gigicar(FmriMatr, ICRefMax):
         np.mean(FmriMatr, 1).reshape(n, 1), 1, m
     )  # Remove Column Means
     CovFmri = (FmriMat.dot(FmriMat.T)) / m  # TODO: use np.cov
-    dd, E = la.eig(CovFmri)
-    dd = np.real(dd)
-    E = np.real(E)
-    D = np.real(dd * np.eye(E.shape[0], E.shape[1]))
+    dd, E = np.linalg.eig(CovFmri)
+    D = dd * np.eye(E.shape[0], E.shape[1])
     EsICnum = ICRefMax.shape[0]
     index = np.argsort(dd)
-    eigenvalues = np.real(dd[index])
+    eigenvalues = dd[index]
     cols = E.shape[1]
     Esort = np.zeros_like(E)
     dsort = np.zeros_like(eigenvalues)
@@ -56,7 +54,7 @@ def gigicar(FmriMatr, ICRefMax):
     Yinv = np.linalg.pinv(Y)
     ICRefMaxN = np.zeros((EsICnum, m))
     nmean = np.mean(ICRefMax, 1).reshape(ICRefMax.shape[0], 1)
-    print(nmean.shape)
+
     ICRefMaxC = ICRefMax - numpy.matlib.repmat(nmean, 1, m)
     for i in range(EsICnum):
         ICRefMaxN[i, :] = ICRefMaxC[i, :] / np.std(ICRefMaxC[i, :])
@@ -91,15 +89,13 @@ def gigicar(FmriMatr, ICRefMax):
             KwDaoshu = ErChuPai * c * (1 / (1 + (c * Jy1) ** 2))
             Simgrad = (1 / m) * Y.dot(reference.T)
             g = a * KwDaoshu * 2 * Negama * EYgy + b * Simgrad
-            dinner = g.T.dot(g)
-            dright = np.power(dinner, 0.5)
-            d = g / dright
+            d = g / (g.T.dot(g)) ** 0.5
             wx = wc + Nemda * d
             wx = wx / np.linalg.norm(wx)
             y3 = wx.T.dot(Y)
-            PreObjValue = a * ErChuPai * np.arctan(c * nege(y3)) + b * (1 / m) * y3.dot(
-                reference.T
-            )
+            PreObjValue = a * ErChuPai * np.arctan(c * (nege(y3))) + b * (
+                1 / m
+            ) * y3.dot(reference.T)
             ObjValueChange = PreObjValue - IniObjValue
             ftol = 0.02
             dg = g.T.dot(d)
