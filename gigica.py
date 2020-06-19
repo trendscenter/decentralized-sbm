@@ -5,7 +5,8 @@ import numpy as np
 import numpy.matlib
 import scipy as sp
 import scipy.linalg as la
-
+import matlab
+import scipy.io as sio
 
 def nege(x):
     y = np.log(np.cosh(x))
@@ -14,8 +15,16 @@ def nege(x):
     negentropy = np.power(E1 - E2, 2)
     return negentropy
 
+def save_test_workspace(**kwargs):
+    test_dict = {}
+    for k,v in kwargs.items():
+        if k == 'matlab_engine':
+            continue
+        test_dict['test_'+k] = v
+    sio.savemat('test.mat', test_dict)
+    
 
-def gigicar(FmriMatr, ICRefMax):
+def gigicar(FmriMatr, ICRefMax, matlab_engine=None):
     n, m = FmriMatr.shape
     nmean = numpy.matlib.repmat(
         np.mean(FmriMatr, 1).reshape(n, 1), 1, m
@@ -24,18 +33,30 @@ def gigicar(FmriMatr, ICRefMax):
         np.mean(FmriMatr, 1).reshape(n, 1), 1, m
     )  # Remove Column Means
     CovFmri = (FmriMat.dot(FmriMat.T)) / m  # TODO: use np.cov
-    dd, E = np.linalg.eig(CovFmri)
-    D = dd * np.eye(E.shape[0], E.shape[1])
-    EsICnum = ICRefMax.shape[0]
-    index = np.argsort(dd)
-    eigenvalues = dd[index]
-    cols = E.shape[1]
-    Esort = np.zeros_like(E)
-    dsort = np.zeros_like(eigenvalues)
-    for i in range(cols):
-        Esort[:, i] = E[:, index[cols - i - 1]]
-        dsort[i] = eigenvalues[index[cols - i - 1]]
 
+    if matlab_engine is not None:
+        E, D = matlab_engine.eig(matlab.double(CovFmri.tolist()), nargout=2)
+        E = np.asarray(E)
+        D = np.asarray(D)
+        dd = np.diag(D)
+    else:
+        dd, E = np.linalg.eig(CovFmri)
+        D = dd * np.eye(E.shape[0], E.shape[1])
+    EsICnum = ICRefMax.shape[0]
+    index = np.argsort(np.diag(D))
+    #index = index[::-1]
+    eigenvalues = dd[index]
+
+    cols = E.shape[1]
+    #Esort = np.zeros_like(E)
+    #dsort = np.zeros_like(eigenvalues)
+    Esort = E[:,index[::-1]]
+    dsort = dd[index[::-1]]
+    #for i in range(cols):
+    #   iii = cols - i - 1
+        #Esort[:, i] = E[:, index[cols - i - 1]]
+        #dsort[i] = eigenvalues[index[cols - i - 1]]
+    
     thr = 0
     numpc = 0
     for i in range(cols):
@@ -49,7 +70,7 @@ def gigicar(FmriMatr, ICRefMax):
 
     if thr < 1e-10 and numpc < n:
         for i in range(Y.shape[0]):
-            Y[i, :] = Y[i, :] / np.std(Y[i, :])
+            Y[i, :] = Y[i, :] / np.std(Y[i, :], ddof=1)
 
     Yinv = np.linalg.pinv(Y)
     ICRefMaxN = np.zeros((EsICnum, m))
@@ -57,7 +78,7 @@ def gigicar(FmriMatr, ICRefMax):
 
     ICRefMaxC = ICRefMax - numpy.matlib.repmat(nmean, 1, m)
     for i in range(EsICnum):
-        ICRefMaxN[i, :] = ICRefMaxC[i, :] / np.std(ICRefMaxC[i, :])
+        ICRefMaxN[i, :] = ICRefMaxC[i, :] / np.std(ICRefMaxC[i, :], ddof=1)
 
     NegeEva = np.zeros((EsICnum, 1))
     for i in range(EsICnum):
@@ -71,6 +92,7 @@ def gigicar(FmriMatr, ICRefMax):
     for ICnum in range(EsICnum):
         reference = ICRefMaxN[ICnum, :]
         wc = (reference.dot(Yinv)).T
+        wc = wc/np.linalg.norm(wc, 2)
         y1 = wc.T.dot(Y)
         EyrInitial = (1 / m) * (y1.dot(reference.T))
         NegeInitial = nege(y1)
@@ -91,7 +113,7 @@ def gigicar(FmriMatr, ICRefMax):
             g = a * KwDaoshu * 2 * Negama * EYgy + b * Simgrad
             d = g / (g.T.dot(g)) ** 0.5
             wx = wc + Nemda * d
-            wx = wx / np.linalg.norm(wx)
+            wx = wx / np.linalg.norm(wx, 2)
             y3 = wx.T.dot(Y)
             PreObjValue = a * ErChuPai * np.arctan(c * (nege(y3))) + b * (
                 1 / m

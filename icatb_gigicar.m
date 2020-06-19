@@ -54,6 +54,7 @@ cols=size(E,2);
 Esort=zeros(size(E));
 dsort=zeros(size(eigenvalues));
 for i=1:cols
+    iii = cols-i+1
     Esort(:,i) = E(:, index(cols-i+1) );
     dsort(i)   = eigenvalues(index(cols-i+1) );
 end
@@ -159,3 +160,17 @@ y=log(cosh(x));
 E1=mean(y);
 E2=0.3745672075;
 negentropy=(E1- E2)^2;
+
+function e=test_these(A,B)
+disp(all(all(A==B)));
+try
+    disp(all(all(A==B')));
+catch Excpetion
+    disp('Not');
+end
+disp(sum(sum(abs(A-B))));
+try
+    disp(sum(sum(abs(A-B'))));
+catch Excpetion
+    disp('Not')
+end
